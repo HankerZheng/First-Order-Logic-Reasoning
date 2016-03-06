@@ -27,6 +27,10 @@ class Substitution(dict):
 
 	def add_subst(self, key, val):
 		self[key] = val
+		# if sub={a/b,b/A}, then the sub should be {a/A, b/A}
+		if key in self.values():
+			for a in self.keys():
+				if self[a] == key: self[a] = val
 		return self
 
 	def __str__(self):
@@ -173,7 +177,8 @@ def UNIFY_VAR(var,x,sub):
 
 def STANDARD_VARIABLES(clauses, imply):
 	'''
-	if vars of the two is the same, change the name of the next one
+	Rename the var in the clauses, and return the new renamed clauses
+	The new name is a global unique name
 	'''	
 	def name_gen(var):
 		global name_count
@@ -199,7 +204,8 @@ def STANDARD_VARIABLES(clauses, imply):
 		rhs.append(change_var_name(clause, var_pool))
 	return (lhs,rhs)
 
-def SUBST(sub, clause):
+def SUBST(sub, input_clause):
+	clause = Clause(input_clause.name)
 	for arg in clause.args:
 		if isinstance(arg, Variable) and arg in sub:
 			clause.change_arg(arg, sub[arg])
@@ -216,7 +222,7 @@ def FOL_BC_OR(kb, goal, substs):
 
 	the relationships between substitutions are OR
 	'''
-	def arg_match(cargs, gargs, sub): 
+	def arg_match(cargs, gargs, sub):
 		for i in xrange(len(cargs)):
 			if isinstance(gargs[i], Constant) and gargs[i] != cargs[i]:
 				return "Failure"
@@ -226,22 +232,26 @@ def FOL_BC_OR(kb, goal, substs):
 
 	flag = 0
 	args = [arg if isinstance(arg, Constant) else '_' for arg in goal.args]
-	print 'ASK: %s(%s)' % (goal.func, ', '.join(args))
+	print 'Ask: %s(%s)' % (goal.func, ', '.join(args))
 	for sentence in kb:
 		if sentence.is_imply:
 			if sentence.imply[0].func == goal.func:
 				lhs, rhs = STANDARD_VARIABLES(sentence.clauses, sentence.imply)
 				for sub_and in FOL_BC_AND(kb, lhs, UNIFY(rhs[0], goal, substs)):
-					print 'True: %s' % SUBST(sub_and, goal)
+					print 'True: %s' % SUBST(sub_and, rhs[0])
 					flag = 1
 					yield sub_and
-		else: # find the whether the goal matches one clause
+		else:
+			# find such cases:	1. ASK: A(x),  KB: A(B),  True: A(B)
+			#				  	2. ASK: A(B),  KB: A(B),  True: A(B)
 			for clause in sentence.clauses:
 				if clause.func == goal.func and clause.args == goal.args:
+					#for case 1
 					print 'True: %s' % goal
 					flag = 1
 					yield substs
 				elif clause.func == goal.func:
+					#for case 2
 					res = arg_match(clause.args, goal.args, substs)
 					if res != 'Failure':
 						print 'True: %s' % SUBST(res, goal)

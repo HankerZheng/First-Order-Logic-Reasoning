@@ -5,7 +5,7 @@ empty_sub = HW2.Substitution()
 print '========================'
 print 'TEST FOR OBJECT PARSING:'
 sentences = []
-with open('../samples/sample02.txt') as f:
+with open('../samples/sample05.txt') as f:
 	#test for imply find
 	for line in f:
 		sentences.append(HW2.Sentence(line))
@@ -78,6 +78,7 @@ kb = [HW2.Sentence('F(x) && G(x) => A(x)'), HW2.Sentence('F(B)'), HW2.Sentence('
 query = 'A(B)'
 print HW2.FOL_BC_ASK(kb,query)
 print '========================'
+
 
 print 'FINAL TEST2:'
 kb = sentences[2:]

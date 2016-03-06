@@ -216,7 +216,7 @@ def FOL_BC_OR(kb, goal, substs):
 
 	the relationships between substitutions are OR
 	'''
-	def arg_match(cargs, gargs, sub):
+	def arg_match(cargs, gargs, sub): 
 		for i in xrange(len(cargs)):
 			if isinstance(gargs[i], Constant) and gargs[i] != cargs[i]:
 				return "Failure"

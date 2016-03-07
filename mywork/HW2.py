@@ -22,7 +22,10 @@ class Substitution(dict):
 	'''
 	Substitution class, a['x']='y' means x/y
 	'''
-	def __init__(self, **kw):
+	def __init__(self, *args, **kw):
+		for sub in args:
+			for key in sub.keys():
+				self[key] = sub[key]
 		super(Substitution, self).__init__(**kw)
 
 	def add_subst(self, key, val):
@@ -183,7 +186,10 @@ def STANDARD_VARIABLES(clauses, imply):
 	def name_gen(var):
 		global name_count
 		name_count+=1
-		return var+_APP_NAME+str(name_count)
+		if _APP_NAME in var.name:
+			return var[:var.find(_APP_NAME)+len(_APP_NAME)]+str(name_count)
+		else:
+			return var+_APP_NAME+str(name_count)
 
 	def change_var_name(clause, var_pool):
 		tmp = Clause(clause.name)
@@ -204,14 +210,43 @@ def STANDARD_VARIABLES(clauses, imply):
 		rhs.append(change_var_name(clause, var_pool))
 	return (lhs,rhs)
 
-def SUBST(sub, input_clause):
-	clause = Clause(input_clause.name)
+def SUBST(sub, clause_in):
+	clause = Clause(clause_in.name)
 	for arg in clause.args:
 		if isinstance(arg, Variable) and arg in sub:
 			clause.change_arg(arg, sub[arg])
 			clause.update_name()
 	return clause
 
+
+def FATCH_RULE_FOR_GOAL(kb, goal):
+	flag = 0
+	for sentence in kb:
+		if sentence.is_imply:
+			if sentence.imply[0].func == goal.func:
+				flag = 1
+				yield (sentence.clauses, sentence.imply, 0)
+		else:
+		# find such cases:	1. ASK: A(B),  KB: A(B),  True: A(B)
+		#				  	2. ASK: A(x),  KB: A(B),  True: A(B)
+			for clause in sentence.clauses:
+				if clause.func == goal.func and clause.args == goal.args:
+				# case 1
+					flag = 1
+					yield (sentence.clauses, [goal], 1)
+				elif clause.func == goal.func:
+					check = 0
+					for i in xrange(len(goal.args)):
+						if isinstance(goal.args[i], Constant) and isinstance(clause.args[i], Constant) and goal.args[i].name != clause.args[i].name:
+							check = 1
+							break
+					if check == 0:
+					# case 2
+						flag = 1
+						yield ([clause], [goal], 2)
+					else: continue
+	# goal is false
+	if flag == 0:	yield (None,None,-1)
 
 def FOL_BC_OR(kb, goal, substs):
 	'''
@@ -221,8 +256,12 @@ def FOL_BC_OR(kb, goal, substs):
 	substs:	a dict of substitutions
 
 	the relationships between substitutions are OR
+	Yield a substitution to match the goal, there may be several different substitution
+		Print 'True' when there exists a substitution
+		Print 'False' when there is no substitution
 	'''
-	def arg_match(cargs, gargs, sub):
+	def arg_match(cargs, gargs, sub_in):
+		sub = Substitution(sub_in)
 		for i in xrange(len(cargs)):
 			if isinstance(gargs[i], Constant) and gargs[i] != cargs[i]:
 				return "Failure"
@@ -230,40 +269,40 @@ def FOL_BC_OR(kb, goal, substs):
 				sub.add_subst(gargs[i], cargs[i])
 		return sub
 
-	flag = 0
+	old_sub, flag = substs, 0
 	args = [arg if isinstance(arg, Constant) else '_' for arg in goal.args]
-	print 'Ask: %s(%s)' % (goal.func, ', '.join(args))
-	for sentence in kb:
-		if sentence.is_imply:
-			if sentence.imply[0].func == goal.func:
-				lhs, rhs = STANDARD_VARIABLES(sentence.clauses, sentence.imply)
-				for sub_and in FOL_BC_AND(kb, lhs, UNIFY(rhs[0], goal, substs)):
-					print 'True: %s' % SUBST(sub_and, rhs[0])
-					flag = 1
-					yield sub_and
-		else:
-			# find such cases:	1. ASK: A(x),  KB: A(B),  True: A(B)
-			#				  	2. ASK: A(B),  KB: A(B),  True: A(B)
-			for clause in sentence.clauses:
-				if clause.func == goal.func and clause.args == goal.args:
-					#for case 1
-					print 'True: %s' % goal
-					flag = 1
-					yield substs
-				elif clause.func == goal.func:
-					#for case 2
-					res = arg_match(clause.args, goal.args, substs)
-					if res != 'Failure':
-						print 'True: %s' % SUBST(res, goal)
-						flag = 1
-						yield res
+	for (lhs,rhs,code) in FATCH_RULE_FOR_GOAL(kb, goal):
+		#undo last sub
+		substs = old_sub
+		print 'Ask%d: %s(%s)' % (code,goal.func, ', '.join(args))
+		if code == -1:
+			break
+		if code == 0:
+			lhs, rhs = STANDARD_VARIABLES(lhs,rhs)
+			for sub_and in FOL_BC_AND(kb, lhs, UNIFY(rhs[0], goal, substs)):
+				print 'True: %s0' % SUBST(sub_and, rhs[0])
+				old_sub, flag = substs, 1
+				yield sub_and
+		elif code == 1:
+			print 'True: %s1' % rhs[0]
+			flag = 1
+			yield substs
+		elif code == 2:
+		#no need for STANDARD_VARIABLES, variable already standardized
+			old_sub = substs
+			res = arg_match(lhs[0].args, rhs[0].args, substs)
+			if res != 'Failure':
+				print 'True: %s2' % SUBST(res, rhs[0])
+				flag = 1
+				yield res
 	if flag == 0:
 		print 'False: %s(%s)' % (goal.func, ', '.join(args))
-		yield 'Failure'
 
 def FOL_BC_AND(kb, goals, substs):
 	'''
 	this is a generator which will yield a Substitution
+	Yield a substitution if there is a way to satisfy the goals at the same time
+	Return when there is no way to satisfy the goals at the same time 
 
 	the relationships between substitutions are AND
 	'''
@@ -272,8 +311,9 @@ def FOL_BC_AND(kb, goals, substs):
 	elif len(goals) == 0:
 		yield substs
 	else:
-		first, rest = goals[0], goals[1:]
-		for sub_or in FOL_BC_OR(kb, SUBST(substs,first), substs):
+		first, rest = goals[0], goals[1:]		
+		this_query = SUBST(substs,first)
+		for sub_or in FOL_BC_OR(kb, this_query, substs):
 			for sub_and in FOL_BC_AND(kb,rest,sub_or):
 				yield sub_and
 
@@ -281,12 +321,13 @@ def FOL_BC_ASK(kb, query):
 	'''
 	for each clause in query, call FOL_BC_OR()
 	'''
-	my_query = query if isinstance(query, Sentence) else Sentence(query)
-	for goal in my_query.clauses:		
-		for sub in FOL_BC_OR(kb, goal, Substitution()):
-			if sub == 'Failure':
-				return False
-	return True
+	flag = 0
+	this_query = query if isinstance(query, Sentence) else Sentence(query)
+	for goal in this_query.clauses:
+		for sub in FOL_BC_OR(kb,goal,Substitution()):
+			flag +=1
+			break
+	return True if flag==len(this_query.clauses) else False
 
 
 if __name__ == '__main__':

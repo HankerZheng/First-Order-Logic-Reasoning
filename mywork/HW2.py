@@ -1,4 +1,4 @@
-import re
+import re, sys
 
 _RE_IMPLY = re.compile('^.+=> (.+)$')
 _RE_CLAUSE = re.compile(r'([A-Z]\w*?\(.+?\))')
@@ -8,6 +8,7 @@ _RE_ARGS = re.compile(r'[\( ](\w+?)[,\)]')
 
 name_count = 0
 _APP_NAME = 'deadbeef'
+output_file = None
 
 class BasicClassHW2(str):
 	'''
@@ -227,8 +228,8 @@ def FATCH_RULE_FOR_GOAL(kb, goal):
 				flag = 1
 				yield (sentence.clauses, sentence.imply, 0)
 		else:
-		# find such cases:	1. ASK: A(B),  KB: A(B),  True: A(B)
-		#				  	2. ASK: A(x),  KB: A(B),  True: A(B)
+		# find such cases:	1. ASK: A(B)  |KB: A(B)  |True: A(B)
+		#				  	2. ASK: A(x)  |KB: A(B)  |True: A(B)
 			for clause in sentence.clauses:
 				if clause.func == goal.func and clause.args == goal.args:
 				# case 1
@@ -274,17 +275,17 @@ def FOL_BC_OR(kb, goal, substs):
 	for (lhs,rhs,code) in FATCH_RULE_FOR_GOAL(kb, goal):
 		#undo last sub
 		substs = old_sub
-		print 'Ask%d: %s(%s)' % (code,goal.func, ', '.join(args))
+		output_file.write('Ask: %s(%s)\n' % (goal.func, ', '.join(args)))
 		if code == -1:
 			break
 		if code == 0:
 			lhs, rhs = STANDARD_VARIABLES(lhs,rhs)
 			for sub_and in FOL_BC_AND(kb, lhs, UNIFY(rhs[0], goal, substs)):
-				print 'True: %s0' % SUBST(sub_and, rhs[0])
+				output_file.write('True: %s\n' % SUBST(sub_and, rhs[0]))
 				old_sub, flag = substs, 1
 				yield sub_and
 		elif code == 1:
-			print 'True: %s1' % rhs[0]
+			output_file.write('True: %s\n' % rhs[0])
 			flag = 1
 			yield substs
 		elif code == 2:
@@ -292,11 +293,11 @@ def FOL_BC_OR(kb, goal, substs):
 			old_sub = substs
 			res = arg_match(lhs[0].args, rhs[0].args, substs)
 			if res != 'Failure':
-				print 'True: %s2' % SUBST(res, rhs[0])
+				output_file.write('True: %s\n' % SUBST(res, rhs[0]))
 				flag = 1
 				yield res
 	if flag == 0:
-		print 'False: %s(%s)' % (goal.func, ', '.join(args))
+		output_file.write('False: %s(%s)\n' % (goal.func, ', '.join(args)))
 
 def FOL_BC_AND(kb, goals, substs):
 	'''
@@ -324,11 +325,25 @@ def FOL_BC_ASK(kb, query):
 	flag = 0
 	this_query = query if isinstance(query, Sentence) else Sentence(query)
 	for goal in this_query.clauses:
+		flag = 0
 		for sub in FOL_BC_OR(kb,goal,Substitution()):
-			flag +=1
+			flag =1
 			break
-	return True if flag==len(this_query.clauses) else False
+		if flag == 0:
+			output_file.write('False')
+			return
+	output_file.write('True')
+
 
 
 if __name__ == '__main__':
-	pass
+	sentences = []
+	input_file_name = sys.argv[2]
+	print input_file_name
+	with open(input_file_name, 'r') as f:
+		for line in f:
+			sentences.append(Sentence(line))
+	kb = sentences[2:]
+	query = sentences[0]
+	with open('output.txt','w') as output_file:
+		FOL_BC_ASK(kb, query)

@@ -1,6 +1,5 @@
 import sys
 import copy
-import string
 
 
 class KBRule(object):
@@ -63,7 +62,7 @@ def standardize_vars(s):
         arg = s.rhs.args[index]
         if is_variable(arg):
             new_arg_index = variable_index + 1
-            new_arg = string.lowercase[new_arg_index]
+            new_arg = 'a' + str(new_arg_index)
             vars_dict[arg] = new_arg
             s.rhs.args[index] = new_arg
             variable_index = new_arg_index
@@ -75,7 +74,7 @@ def standardize_vars(s):
                     sen.args[index] = vars_dict[arg]
                 else:
                     new_arg_index = variable_index + 1
-                    new_arg = string.lowercase[new_arg_index]
+                    new_arg = 'a' + str(new_arg_index)
                     vars_dict[arg] = new_arg
                     sen.args[index] = new_arg
                     variable_index = new_arg_index
@@ -164,21 +163,26 @@ def fol_bc_ask(kb, goal):
 
 def fol_bc_or(kb, goal, theta):
     fetch_kb = fetch_rules_for_goal(kb, goal)
+    ask_query = print_rule(copy.deepcopy(goal)).get_sentence()
     if len(fetch_kb) == 0:
-        output_file.write('Ask: ' + print_rule(copy.deepcopy(goal)).get_sentence() + '\n')
-        output_file.write('False: ' + goal.get_sentence() + '\n')
+        output_file.write('Ask: ' + ask_query + '\n')
+        output_file.write('False: ' + ask_query + '\n')
     else:
         flag_or = False
+        global queries_asking
+        queries_asking.add(ask_query)
         for s in fetch_kb:
-            output_file.write('Ask: ' + print_rule(copy.deepcopy(goal)).get_sentence() + '\n')
+            output_file.write('Ask: ' + ask_query + '\n')
             s = standardize_vars(copy.deepcopy(s))
             for theta_1 in fol_bc_and(kb, s.lhs, unify(s.rhs.get_sentence(), copy.deepcopy(goal.get_sentence()),
                                                        copy.deepcopy(theta))):
                 flag_or = True
+                queries_asking.discard(ask_query)
                 output_file.write('True: ' + print_rule(subst(theta_1, copy.deepcopy(goal))).get_sentence() + '\n')
                 yield theta_1
         if flag_or is False:
-            output_file.write('False: ' + print_rule(copy.deepcopy(goal)).get_sentence() + '\n')
+            queries_asking.discard(ask_query)
+            output_file.write('False: ' + ask_query + '\n')
 
 
 def fol_bc_and(kb, goals, theta):
@@ -195,7 +199,8 @@ def fol_bc_and(kb, goals, theta):
 
 
 variable_index = -1
-# input_file = open('sample05.txt', 'rU')
+queries_asking = set()
+# input_file = open('sample03_3.txt', 'rU')
 input_file = open(sys.argv[2], 'rU')
 output_file = open('output.txt', 'w')
 queries = input_file.readline().strip()
@@ -204,14 +209,14 @@ KB = []
 for num in range(KB_num):
     rule = input_file.readline().strip()
     KB.append(get_kb_rule(rule))
+
 flag_result = False
 for query in queries.split(' && '):
     flag_result = False
     goal = Atomic(query)
     for i in fol_bc_ask(KB, goal):
-        if i:
-            flag_result = True
-            break
+        flag_result = True
+        break
     if flag_result is False:
         output_file.write('False')
         break

@@ -352,6 +352,7 @@ def FOL_BC_ASK(kb, query):
 if __name__ == '__main__':
 	sentences = []
 	input_file_name = sys.argv[2]
+	print input_file_name
 	with open(input_file_name, 'r') as f:
 		for line in f:
 			sentences.append(Sentence(line))

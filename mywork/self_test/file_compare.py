@@ -51,9 +51,16 @@ def file_compare(file_name1, file_name2, info):
     if str1 != str2 or len(fa) != len(fb):
         #打印出不同的行序和列序，并把不同的前一句后本句打印出来
         #最后两个字符是不同的地方
+        print "  Query is:  %s" % (fa[0].strip())  
         print "\trow:", row+1, "col:", col
-        print "\t%s is:\n\t\t%s\n\t\t%s" % (file_name1 , fa[row-1].strip(),fa[row].strip())
-        print "\t%s is:\n\t\t%s\n\t\t%s" % (file_name2, fb[row-1].strip(),fb[row].strip())
+        try:
+            print "\t%s is:\n\t\t%s\n\t\t%s" % (file_name1 , fa[row-1].strip(),fa[row].strip())        
+        except: 
+            print "\t%s is:\n\t\t{EMPTY}"% file_name1
+        try:
+            print "\t%s is:\n\t\t%s\n\t\t%s" % (file_name2, fb[row-1].strip(),fb[row].strip())
+        except:
+            print "\t%s is:\n\t\t{EMPTY}"% file_name2
         return 0
     else :
         print "\tAll are same!"
